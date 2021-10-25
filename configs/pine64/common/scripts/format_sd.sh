@@ -26,12 +26,17 @@ if [ ! -b "$PINE64_SD" ]; then
 fi
 
 resources_path="${SKIFF_CURRENT_CONF_DIR}/resources"
-ubootimg="$BUILDROOT_DIR/output/images/u-boot-sunxi-with-spl.bin"
-ubootimg2="$BUILDROOT_DIR/output/images/u-boot.itb"
-idbloader=""
+images_path="${BUILDROOT_DIR}/output/images"
+ubootimg="${images_path}/u-boot-sunxi-with-spl.bin"
+ubootimg2="${images_path}/u-boot.itb"
+idbloader="${images_path}/idbloader.img"
 
 if [ ! -f "$ubootimg" ]; then
     ubootimg=$ubootimg2
+fi
+
+if [ ! -f "$idbloader" ]; then
+    idbloader=""
 fi
 
 rk3399fw="$BUILDROOT_DIR/output/images/rk3399-firmware-blobs"
@@ -71,18 +76,17 @@ sudo dd if=/dev/zero of=$PINE64_SD bs=8k count=13 oflag=dsync
 
 echo "Creating partitions..."
 sudo partprobe ${PINE64_SD} || true
-sudo parted $PINE64_SD mklabel msdos
+sudo parted $PINE64_SD mklabel gpt
 
 # boot
 sudo parted -a optimal $PINE64_SD mkpart primary fat32 128MiB 510MiB
 sudo parted $PINE64_SD set 1 boot on
-sudo parted $PINE64_SD set 1 lba on
 
 # rootfs
 sudo parted -a optimal $PINE64_SD mkpart primary ext4 510MiB 1024MiB
 
 # persist
-sudo parted -a optimal $PINE64_SD -- mkpart primary ext4 1024MiB "-1s"
+sudo parted -a optimal $PINE64_SD -- mkpart primary ext4 1024MiB "100%"
 
 echo "Waiting for partprobe..."
 sync && sync
@@ -113,7 +117,7 @@ sync && sync
 
 echo "Flashing u-boot..."
 if [ -n "$idbloader" ]; then
-    # idbloader for rk3399 machines
+    # idbloader if necessary
     dd iflag=dsync oflag=dsync if=$idbloader of=$PINE64_SD seek=64 ${SD_FUSE_DD_ARGS}
     dd iflag=dsync oflag=dsync if=$ubootimg of=$PINE64_SD seek=16384 ${SD_FUSE_DD_ARGS}
 else
